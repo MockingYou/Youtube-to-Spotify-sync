@@ -2,8 +2,11 @@ const express = require('express');
 const request = require('request');
 const cors = require('cors'); // Import the cors package
 
+const google = require('./get-youtube-data')
+
+
 const app = express();
-const PORT = 8080;
+const PORT = 5050;
 const config = require('./config');
 
 
@@ -19,13 +22,13 @@ app.listen(PORT, (error) =>{
     }
 );
 
-var client_id = config.client_id;    
-var client_secret = config.client_secret;
+var client_id_spotify = config.client_id_spotify;    
+var client_secret_spotify = config.client_secret_spotify;
 
 var authOptions = {
   url: 'https://accounts.spotify.com/api/token',
   headers: {
-    'Authorization': 'Basic ' + (new Buffer.from(client_id + ':' + client_secret).toString('base64'))
+    'Authorization': 'Basic ' + (new Buffer.from(client_id_spotify + ':' + client_secret_spotify).toString('base64'))
   },
   form: {
     grant_type: 'client_credentials'
@@ -52,3 +55,7 @@ request.post(authOptions, function(error, response, body) {
       });
     }
   });
+
+google.authenticate();
+// gapi.loadClient();
+// gapi.execute();
