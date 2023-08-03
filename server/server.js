@@ -1,18 +1,60 @@
 const express = require('express');
 const request = require('request');
 const cors = require('cors'); // Import the cors package
-
-const google = require('./get-youtube-data')
-
-
+const axios = require('axios');
 const app = express();
 const PORT = 5050;
-const config = require('./config');
+
+const config = require('./config.js')
+const apiKey = config.youtube_api_key;
+const baseApiUrl = "https://www.googleapis.com/youtube/v3"; 
+// https://www.googleapis.com/youtube/v3/search?key=apiKey&type=video&part=snippet&q=foo   ---> change type for playlist
+
+// -------- Google APIS ----------
+const { google } = require('googleapis');
+
+const youtube = google.youtube({
+  version: 'v3',
+  auth: apiKey
+})
+
+app.get('/search-with-googleapis', async (req, res, next) => {
+  try {
+    const searchQuery = req.query.search_query
+    const response = await youtube.search.list({
+      part: 'snippet',
+      q: searchQuery,
+      type: 'video'
+    })
+    const titles = response.data.items.map((item) => item.snippet.title)
+    res.send(titles)
+  } catch (error) {
+    next(error)
+  }
+})
+// -------- END Google APIS ----------
+
 
 
 // Enable CORS for all routes
 app.use(cors());
 app.use(express.json());
+
+app.get("/", (req, res) => {
+  res.send("Hello World!");
+});
+
+app.get('/search', async (req, res, next) => {
+  try {
+    const searchQuery = req.query.search_query
+    const url = `${baseApiUrl}/search?key=${apiKey}&type=video&part=snippet&q=${searchQuery}`
+    const response = await axios.get(url)
+    const titles = response.data.items.map((item) => item.snippet.title)
+    res.send(titles)
+  } catch (error) {
+    next(error)
+  }
+})
 
 app.listen(PORT, (error) =>{
     if(!error)
@@ -55,7 +97,3 @@ request.post(authOptions, function(error, response, body) {
       });
     }
   });
-
-google.authenticate();
-// gapi.loadClient();
-// gapi.execute();
