@@ -1,33 +1,65 @@
-const config = require('./config');
-const { google } = require('googleapis');
-const {authenticate} = require('@google-cloud/local-auth');
-const apiKey = config.youtube_api_key;    
-var client_id_youtube = config.client_id_youtube;    
-var client_secret_youtube = config.client_secret_youtube;    
-const youtube = google.youtube({
-  version: 'v3',
-  auth: apiKey
-})
+const baseApiUrl = "https://www.googleapis.com/youtube/v3";  
+const axios = require('axios');
+const ytdl = require('ytdl-core');
 
-
-
-
-const auth = async () => {
-    const oauth2Client = new google.auth.OAuth2( 
-        client_id_youtube,
-        client_secret_youtube,
-        'http://localhost:5050'
-    );
-    const scopes = 'https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest'
-    const localAuth = await authenticate({
-      // 'online' (default) or 'offline' (gets refresh_token)
-      keyfilePath: '/path/to/keys.json',
-      // If you only need one scope you can pass it as a string
-      scope: scopes
-    });
-    console.log('Tokens:', localAuth.credentials);
-    // const {tokens} = oauth2Client.getToken(youtube_api_key)
-    // oauth2Client.setCredentials(tokens);
+// Function to get the playlist name
+const getPlaylistTitle = async (playlistId, apiKey) => {
+  try {
+    const url = `${baseApiUrl}/playlists?part=snippet&id=${playlistId}&key=${apiKey}`;
+    const response = await axios.get(url);
+    const playlist = response.data.items[0];
+    if (playlist) {
+      return playlist.snippet.title;
+    } else {
+      return null; // Playlist not found or private
+    }
+  } catch (error) {
+    throw new Error('Failed to fetch playlist information');
+  }
 }
 
-module.exports = { authenticate }
+// Function to get the artist and song name 
+const getTotalSongs = async (playlistId, apiKey, nextPageToken = null, totalSongs = 0, songs = []) => {
+  try {
+    const maxResults = 50; // Maximum results per page (50 is the maximum allowed by the YouTube Data API).
+    let url = `${baseApiUrl}/playlistItems?part=snippet&playlistId=${playlistId}&key=${apiKey}&maxResults=${maxResults}`;
+    if (nextPageToken) {
+      url += `&pageToken=${nextPageToken}`;
+    }
+    const response = await axios.get(url);
+    const { items, nextPageToken: newNextPageToken } = response.data;
+
+    const info = await extractSongsFromYouTube(items)
+    songs.push(...info)
+    totalSongs += items.length;
+    // If there are more items to fetch, recursively call the function with the new nextPageToken.
+    if (newNextPageToken) {
+      return getTotalSongs(playlistId, apiKey, newNextPageToken, totalSongs, songs)  
+    } else {
+      // Return the final total when all items have been fetched.
+      return songs;
+    }
+  } catch (error) {
+    throw new Error('Failed to fetch playlist data');
+  }
+}
+
+// Function to extract song names and artists from YouTube API response
+const extractSongsFromYouTube = async (item) => {
+  const url = "https://www.youtube.com/watch?v=";
+  const info = [];
+
+  for (let i = 0; i < item.length; i++) {
+    const videoId = item[i].snippet.resourceId.videoId;
+    const video_url = url + videoId;
+    try {
+      const details = await ytdl.getBasicInfo(video_url);
+      const track = details.videoDetails.title;
+      const artist = details.videoDetails.author.name;
+      info.push({ track, artist });
+    } catch (error) { }
+  }
+  return info;
+}
+
+module.exports =  { getTotalSongs, getPlaylistTitle } 
