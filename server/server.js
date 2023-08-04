@@ -6,7 +6,7 @@ const PORT = 5050;
 
 const config = require('./config.js')
 const { getTotalSongs, getPlaylistTitle } = require('./get-youtube-data');
-const { getAccessToken } = require('./get-spotify-data');
+const { createPlaylistOnSpotify } = require('./get-spotify-data');
 
 const apiKey = config.youtube_api_key;
 const client_id_spotify = config.client_id_spotify;    
@@ -75,13 +75,6 @@ app.get('/api/playlist/:playlistId', async (req, res) => {
   }
 });
 
-app.listen(PORT, (error) =>{
-    if(!error)
-        console.log("Server is Successfully Running, and App is listening on port "+ PORT)
-    else 
-        console.log("Error occurred, server can't start", error);
-    }
-);
 
 
 // var authOptions = {
@@ -119,12 +112,19 @@ app.post('/api/create-playlist/:ytPlaylistId', async (req, res) => {
   try {
     const ytPlaylistId = req.params.ytPlaylistId;
     const playlistTitle = await getPlaylistTitle(ytPlaylistId, apiKey);
-    const playlistId = await getAccessToken(playlistTitle, client_id_spotify, client_secret_spotify);
+    const playlistId = await createPlaylistOnSpotify(playlistTitle, client_id_spotify, client_secret_spotify);
+
     res.json({ playlistId });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create playlist on Spotify' });
   }
 });
 
-
-  app.get('/search-spotify/')
+  
+app.listen(PORT, (error) =>{
+  if(!error)
+      console.log("Server is Successfully Running, and App is listening on port "+ PORT)
+  else 
+      console.log("Error occurred, server can't start", error);
+  }
+);
