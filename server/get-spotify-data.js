@@ -11,9 +11,8 @@ const createPlaylistOnSpotify = async (playlistTitle, spotifyApi) => {
     // Now you can use the spotifyPlaylistId for other operations
     // For example, you can make another API call using this playlist ID:
     const userPlaylists = await spotifyApi.getPlaylist(spotifyPlaylistId);
-    console.log('Retrieved playlists', userPlaylists.body);
-    // Do something with the retrieved playlists
-
+    // console.log('Retrieved playlists', userPlaylists.body);
+  
     return spotifyPlaylistId; // Return the playlist ID if needed
   } catch (error) {
     console.log('Failed to create or retrieve playlist', error);
@@ -21,13 +20,17 @@ const createPlaylistOnSpotify = async (playlistTitle, spotifyApi) => {
   }
 }
 
-
-
-
-
-
-
-
+// Search tracks whose artist's name contains 'Kendrick Lamar', and track name contains 'Alright'
+const searchSongs = async (spotifyApi, track, artist) => {
+  try {
+    const song = await spotifyApi.searchTracks(`track:${track} artist:${artist}`)
+    console.log(`Search tracks by "${track}" in the track name and "${artist}" in the artist name`, song.body);
+    return song;
+  } catch (error) {
+    console.log('Something went wrong!', error);
+    throw error;
+  }
+}
 
 
 
@@ -68,4 +71,4 @@ const createPlaylistOnSpotify = async (playlistTitle, spotifyApi) => {
 //     console.error(error.message);
 //   });
 
-  module.exports = { createPlaylistOnSpotify };
+  module.exports = { createPlaylistOnSpotify, searchSongs };

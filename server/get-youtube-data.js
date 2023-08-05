@@ -2,6 +2,8 @@ const baseApiUrl = "https://www.googleapis.com/youtube/v3";
 const axios = require('axios');
 const ytdl = require('ytdl-core');
 
+const { checkFullName, normalizeString } = require('./utils/filter-songs')
+
 // Function to get the playlist name
 const getPlaylistTitle = async (playlistId, apiKey) => {
   try {
@@ -54,10 +56,17 @@ const extractSongsFromYouTube = async (item) => {
     const video_url = url + videoId;
     try {
       const details = await ytdl.getBasicInfo(video_url);
-      const track = details.videoDetails.title;
-      const artist = details.videoDetails.author.name;
+      let filter = checkFullName(details)
+      let track = normalizeString(filter.track)
+      let artist = normalizeString(filter.artist)
+
+      console.log("Track name:  " + track)
+      console.log("Artist name:  " + artist)
+
       info.push({ track, artist });
-    } catch (error) { }
+    } catch (error) {
+      throw new Error('Failed to fetch song data');
+     }
   }
   return info;
 }

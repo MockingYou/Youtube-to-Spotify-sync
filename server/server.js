@@ -7,7 +7,7 @@ let SpotifyWebApi = require('spotify-web-api-node');
 
 const config = require('./config.js')
 const { getTotalSongs, getPlaylistTitle } = require('./get-youtube-data');
-const { createPlaylistOnSpotify, getAccessToken } = require('./get-spotify-data');
+const { createPlaylistOnSpotify, searchSongs } = require('./get-spotify-data');
 
 const apiKey = config.youtube_api_key;
 const client_id_spotify = config.client_id_spotify;    
@@ -125,15 +125,15 @@ app.get('/callback', (req, res) => {
     .authorizationCodeGrant(code)
     .then(data => {
       spotify_token = data.body['access_token'];
-      console.log(spotify_token)
+      // console.log(spotify_token)
       const refresh_token = data.body['refresh_token'];
       const expires_in = data.body['expires_in'];
 
       spotifyApi.setAccessToken(spotify_token);
       spotifyApi.setRefreshToken(refresh_token);
 
-      console.log('access_token:', spotify_token);
-      console.log('refresh_token:', refresh_token);
+      // console.log('access_token:', spotify_token);
+      // console.log('refresh_token:', refresh_token);
 
       console.log(
         `Sucessfully retreived access token. Expires in ${expires_in} s.`
@@ -144,7 +144,7 @@ app.get('/callback', (req, res) => {
         const data = await spotifyApi.refreshAccessToken();
         spotify_token = data.body['access_token'];
         console.log('The access token has been refreshed!');
-        console.log('access_token:', spotify_token);
+        // console.log('access_token:', spotify_token);
         spotifyApi.setAccessToken(spotify_token);
       }, expires_in / 2 * 1000);
     })
@@ -160,7 +160,15 @@ app.post('/api/create-playlist/:ytPlaylistId', async (req, res) => {
     const ytPlaylistId = req.params.ytPlaylistId;
     const playlistTitle = await getPlaylistTitle(ytPlaylistId, apiKey);
     let playlistId = await createPlaylistOnSpotify(playlistTitle, spotifyApi)
-    console.log('Playlist ID:', playlistId);
+  
+    const songs = await getTotalSongs(ytPlaylistId, apiKey)
+    songs.forEach(song => {
+      console.log("Track: " + song.track)
+      console.log("Artist: " + song.artist)
+      searchSongs(spotifyApi, song.track, song.artist)
+
+    });
+    // console.log('Playlist ID:', playlistId);
   } catch (error) {
     // Handle errors
     res.status(500).json({ error: 'Failed to create playlist on Spotify' });
