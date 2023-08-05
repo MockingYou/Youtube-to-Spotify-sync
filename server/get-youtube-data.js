@@ -60,9 +60,6 @@ const extractSongsFromYouTube = async (item) => {
       let track = normalizeString(filter.track)
       let artist = normalizeString(filter.artist)
 
-      console.log("Track name:  " + track)
-      console.log("Artist name:  " + artist)
-
       info.push({ track, artist });
     } catch (error) {
       throw new Error('Failed to fetch song data');

@@ -7,7 +7,7 @@ let SpotifyWebApi = require('spotify-web-api-node');
 
 const config = require('./config.js')
 const { getTotalSongs, getPlaylistTitle } = require('./get-youtube-data');
-const { createPlaylistOnSpotify, searchSongs } = require('./get-spotify-data');
+const { createPlaylistOnSpotify, searchSongs, addTracksToPlaylist } = require('./get-spotify-data');
 
 const apiKey = config.youtube_api_key;
 const client_id_spotify = config.client_id_spotify;    
@@ -162,13 +162,19 @@ app.post('/api/create-playlist/:ytPlaylistId', async (req, res) => {
     let playlistId = await createPlaylistOnSpotify(playlistTitle, spotifyApi)
   
     const songs = await getTotalSongs(ytPlaylistId, apiKey)
-    songs.forEach(song => {
-      console.log("Track: " + song.track)
-      console.log("Artist: " + song.artist)
-      searchSongs(spotifyApi, song.track, song.artist)
-
-    });
+    let searchArray = []
+    for (const song of songs) {
+      try {
+        const searchedSong = await searchSongs(spotifyApi, song.track, song.artist);
+        searchArray.push(searchedSong);
+      } catch (error) {
+        console.log('Error searching song:', error);
+      }
+    }
+    console.log(searchArray)
+    addTracksToPlaylist(spotifyApi, playlistId, searchArray)
     // console.log('Playlist ID:', playlistId);
+    res.send("Success")
   } catch (error) {
     // Handle errors
     res.status(500).json({ error: 'Failed to create playlist on Spotify' });

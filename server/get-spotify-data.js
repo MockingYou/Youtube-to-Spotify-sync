@@ -23,52 +23,23 @@ const createPlaylistOnSpotify = async (playlistTitle, spotifyApi) => {
 // Search tracks whose artist's name contains 'Kendrick Lamar', and track name contains 'Alright'
 const searchSongs = async (spotifyApi, track, artist) => {
   try {
-    const song = await spotifyApi.searchTracks(`track:${track} artist:${artist}`)
-    console.log(`Search tracks by "${track}" in the track name and "${artist}" in the artist name`, song.body);
-    return song;
+    const song = await spotifyApi.searchTracks(`${track} ${artist}`)
+    console.log(`Search tracks by "${track}" in the track name and "${artist}" in the artist name`);
+    let trackId = `spotify:track:${song.body.tracks.items[0].id}`
+    return trackId;
   } catch (error) {
     console.log('Something went wrong!', error);
     throw error;
   }
 }
 
+const addTracksToPlaylist = async (spotifyApi, playlistId, tracks) => {
+  try {
+    spotifyApi.addTracksToPlaylist(playlistId, tracks)
+    console.log('Added tracks to playlist!');
+  } catch (error) {
+    console.log('Something went wrong!', error);
+  }
+}
 
-
-// async function searchSongsOnSpotify(songName) {
-//   try {
-//     const response = await axios.get(`${SPOTIFY_API_BASE_URL}/search`, {
-//       params: {
-//         q: songName,
-//         type: 'track',
-//         market: 'US', // Change this to your desired market
-//       },
-//       headers: {
-//         Authorization: `Bearer ${SPOTIFY_ACCESS_TOKEN}`,
-//       },
-//     });w
-
-//     const tracks = response.data.tracks.items;
-//     const songs = tracks.map(track => ({
-//       name: track.name,
-//       artists: track.artists.map(artist => artist.name).join(', '),
-//       album: track.album.name,
-//       externalUrl: track.external_urls.spotify,
-//     }));
-
-//     return songs;
-//   } catch (error) {
-//     throw new Error('Failed to search songs on Spotify');
-//   }
-// }
-
-// // Example usage:
-// const songName = 'Enter Sandman'; // Replace with the song name you want to search
-// searchSongsOnSpotify(songName)
-//   .then(songs => {
-//     console.log(songs);
-//   })
-//   .catch(error => {
-//     console.error(error.message);
-//   });
-
-  module.exports = { createPlaylistOnSpotify, searchSongs };
+module.exports = { createPlaylistOnSpotify, searchSongs, addTracksToPlaylist };
