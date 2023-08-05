@@ -19,6 +19,7 @@
     "googleapis": "^123.0.0",
     "nodemon": "^3.0.1",
     "request": "^2.88.2",
+    "spotify-web-api-node": "^5.0.2",
     "youtube-dl-exec": "^2.4.6",
     "ytdl-core": "^4.11.5"
   }

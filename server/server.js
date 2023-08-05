@@ -3,16 +3,17 @@ const cors = require('cors'); // Import the cors package
 const axios = require('axios');
 const app = express();
 const PORT = 5050;
+let SpotifyWebApi = require('spotify-web-api-node');
 
 const config = require('./config.js')
 const { getTotalSongs, getPlaylistTitle } = require('./get-youtube-data');
-const { createPlaylistOnSpotify } = require('./get-spotify-data');
+const { createPlaylistOnSpotify, getAccessToken } = require('./get-spotify-data');
 
 const apiKey = config.youtube_api_key;
 const client_id_spotify = config.client_id_spotify;    
 const client_secret_spotify = config.client_secret_spotify;
 const baseApiUrl = "https://www.googleapis.com/youtube/v3"; 
-
+let spotify_token = ""
 // https://www.googleapis.com/youtube/v3/search?key=apiKey&type=video&part=snippet&q=foo   ---> change type for playlist
 
 // -------- Google APIS ----------
@@ -75,52 +76,120 @@ app.get('/api/playlist/:playlistId', async (req, res) => {
   }
 });
 
+//  ================== Spotify APIs ======================
+const scopes = [
+  'ugc-image-upload',
+  'user-read-playback-state',
+  'user-modify-playback-state',
+  'user-read-currently-playing',
+  'streaming',
+  'app-remote-control',
+  'user-read-email',
+  'user-read-private',
+  'playlist-read-collaborative',
+  'playlist-modify-public',
+  'playlist-read-private',
+  'playlist-modify-private',
+  'user-library-modify',
+  'user-library-read',
+  'user-top-read',
+  'user-read-playback-position',
+  'user-read-recently-played',
+  'user-follow-read',
+  'user-follow-modify'
+];
 
+// credentials are optional
+var spotifyApi = new SpotifyWebApi({
+  clientId: client_id_spotify,
+  clientSecret: client_secret_spotify,
+  redirectUri: 'http://localhost:5050/callback'
+});
 
-// var authOptions = {
-//   url: 'https://accounts.spotify.com/api/token',
-//   headers: {
-//     'Authorization': 'Basic ' + (new Buffer.from(client_id_spotify + ':' + client_secret_spotify).toString('base64'))
-//   },
-//   form: {
-//     grant_type: 'client_credentials'
-//   },
-//   json: true
-// };
+app.get('/login', (req, res) => {
+  res.redirect(spotifyApi.createAuthorizeURL(scopes));
+});
 
-// request.post(authOptions, function(error, response, body) {
-//     if (!error && response.statusCode === 200) {
-  
-//       // use the access token to access the Spotify Web API
-//       var token = body.access_token;
-//       console.log(token)
-//       var options = {
-//         url: `https://api.spotify.com/v1/users/1pj9484y17ck8ycc82xslq9z1`,
-//         headers: {
-//           'Authorization': 'Bearer ' + token
-//         },
-//         json: true
-//       };
-//       request.get(options, function(error, response, body) {
-//         console.log(body);
-//       });
-//     }
-//   });
+app.get('/callback', (req, res) => {
+  const error = req.query.error;
+  const code = req.query.code;
+  const state = req.query.state;
+
+  if (error) {
+    console.error('Callback Error:', error);
+    res.send(`Callback Error: ${error}`);
+    return;
+  }
+
+  spotifyApi
+    .authorizationCodeGrant(code)
+    .then(data => {
+      spotify_token = data.body['access_token'];
+      console.log(spotify_token)
+      const refresh_token = data.body['refresh_token'];
+      const expires_in = data.body['expires_in'];
+
+      spotifyApi.setAccessToken(spotify_token);
+      spotifyApi.setRefreshToken(refresh_token);
+
+      console.log('access_token:', spotify_token);
+      console.log('refresh_token:', refresh_token);
+
+      console.log(
+        `Sucessfully retreived access token. Expires in ${expires_in} s.`
+      );
+      res.send('Success! You can now close the window.');
+
+      setInterval(async () => {
+        const data = await spotifyApi.refreshAccessToken();
+        spotify_token = data.body['access_token'];
+        console.log('The access token has been refreshed!');
+        console.log('access_token:', spotify_token);
+        spotifyApi.setAccessToken(spotify_token);
+      }, expires_in / 2 * 1000);
+    })
+    .catch(error => {
+      console.error('Error getting Tokens:', error);
+      res.send(`Error getting Tokens: ${error}`);
+    });
+}); 
 
 // Route to handle creating a new playlist on Spotify
 app.post('/api/create-playlist/:ytPlaylistId', async (req, res) => {
   try {
     const ytPlaylistId = req.params.ytPlaylistId;
     const playlistTitle = await getPlaylistTitle(ytPlaylistId, apiKey);
-    const playlistId = await createPlaylistOnSpotify(playlistTitle, client_id_spotify, client_secret_spotify);
-
-    res.json({ playlistId });
+    let playlistId = await createPlaylistOnSpotify(playlistTitle, spotifyApi)
+    console.log('Playlist ID:', playlistId);
   } catch (error) {
+    // Handle errors
     res.status(500).json({ error: 'Failed to create playlist on Spotify' });
+    console.log('Error:', error.message);
   }
 });
 
-  
+// // Get a user's playlists
+// spotifyApi.getUserPlaylists('thelinmichael')
+//   .then(function(data) {
+//     console.log('Retrieved playlists', data.body);
+//   },function(err) {
+//     console.log('Something went wrong!', err);
+//   });
+// // Add tracks to a playlist
+// spotifyApi.addTracksToPlaylist('5ieJqeLJjjI8iJWaxeBLuK', ["spotify:track:4iV5W9uYEdYUVa79Axb7Rh", "spotify:track:1301WleyT98MSxVHPZCA6M"])
+//   .then(function(data) {
+//     console.log('Added tracks to playlist!');
+//   }, function(err) {
+//     console.log('Something went wrong!', err);
+//   });
+//   // Upload a custom playlist cover image
+// spotifyApi.uploadCustomPlaylistCoverImage('5ieJqeLJjjI8iJWaxeBLuK','longbase64uri')
+// .then(function(data) {
+//    console.log('Playlsit cover image uploaded!');
+// }, function(err) {
+//   console.log('Something went wrong!', err);
+// });
+
 app.listen(PORT, (error) =>{
   if(!error)
       console.log("Server is Successfully Running, and App is listening on port "+ PORT)
