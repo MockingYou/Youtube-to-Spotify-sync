@@ -32,8 +32,15 @@ const searchSongs = async (spotifyApi, track, artist) => {
 
 const addTracksToPlaylist = async (spotifyApi, playlistId, tracks) => {
   try {
-    spotifyApi.addTracksToPlaylist(playlistId, tracks)
-    console.log('Added tracks to playlist!');
+    const maxTracksPerRequest = 100;
+    const batches = [];
+    for (let i = 0; i < tracks.length; i += maxTracksPerRequest) {
+      batches.push(tracks.slice(i, i + maxTracksPerRequest));
+    }
+    for (const batch of batches) {
+      spotifyApi.addTracksToPlaylist(playlistId, batch)
+      console.log('Added tracks to playlist!');
+    }
   } catch (error) {
     console.log('Something went wrong!', error);
     throw error;
@@ -41,22 +48,64 @@ const addTracksToPlaylist = async (spotifyApi, playlistId, tracks) => {
 }
 
 const getSpotifyPlaylistData = async (spotifyApi, playlistId) => {
-  const info = []
-  const playlistTracks = await spotifyApi.getPlaylistTracks(playlistId, {
-    offset: 0,
-    limit: 5,
-    fields: 'items'
-  })
-  let playlistItems = playlistTracks.body.items
-  let track = ''
-  let artist = ''
-  playlistItems.forEach(item => {
-    track = item.track.name
-    artist = item.track.artists[0].name
-    info.push({ track, artist });
-  });
-  console.log(info)
-
-  return info
+  try {
+    const allSongs = []
+    const maxResults = 100;
+    let offset = 0;
+    let hasSongs = true; // Set initially to true to start the loop
+    const playlistTracks = await spotifyApi.getPlaylistTracks(playlistId, {
+      fields: 'total',
+    });
+    let playlistLength = playlistTracks.body.total;
+    do {
+      const playlistTracks = await spotifyApi.getPlaylistTracks(playlistId, {
+        offset: offset,
+        limit: maxResults,
+        fields: 'items(track(name,artists(name)))'
+      });
+      let playlistItems = playlistTracks.body.items
+      const songs = playlistItems.map(item => ({
+        track: item.track.name,
+        artist: item.track.artists[0].name
+      }));
+      allSongs.push(...songs);
+      if(offset >= playlistLength) {
+        hasSongs = false;
+      } else {
+        offset += maxResults;
+      }
+    } while (hasSongs)
+    return allSongs
+  } catch (error) {
+    console.log(error.message)
+  }
 }
+
+
+
+// // Get a user's playlists
+// spotifyApi.getUserPlaylists('thelinmichael')
+//   .then(function(data) {
+//     console.log('Retrieved playlists', data.body);
+//   },function(err) {
+//     console.log('Something went wrong!', err);
+//   });
+// // Add tracks to a playlist
+// spotifyApi.addTracksToPlaylist('5ieJqeLJjjI8iJWaxeBLuK', ["spotify:track:4iV5W9uYEdYUVa79Axb7Rh", "spotify:track:1301WleyT98MSxVHPZCA6M"])
+//   .then(function(data) {
+//     console.log('Added tracks to playlist!');
+//   }, function(err) {
+//     console.log('Something went wrong!', err);
+//   });
+//   // Upload a custom playlist cover image
+// spotifyApi.uploadCustomPlaylistCoverImage('5ieJqeLJjjI8iJWaxeBLuK','longbase64uri')
+// .then(function(data) {
+//    console.log('Playlsit cover image uploaded!');
+// }, function(err) {
+//   console.log('Something went wrong!', err);
+// });
+
+
+
+
 module.exports = { createPlaylistOnSpotify, searchSongs, addTracksToPlaylist, getSpotifyPlaylistData };

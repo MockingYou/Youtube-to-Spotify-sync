@@ -16,6 +16,14 @@ const baseApiUrl = "https://www.googleapis.com/youtube/v3";
 let spotify_token = ""
 // https://www.googleapis.com/youtube/v3/search?key=apiKey&type=video&part=snippet&q=foo   ---> change type for playlist
 
+// Enable CORS for all routes
+app.use(cors());
+app.use(express.json());
+
+app.get("/", (req, res) => {
+  res.send("Hello World!");
+});
+
 // -------- Google APIS ----------
 
 const { google } = require('googleapis');
@@ -41,15 +49,6 @@ app.get('/search-with-googleapis', async (req, res, next) => {
 })
 // -------- END Google APIS ----------
 
-
-// Enable CORS for all routes
-app.use(cors());
-app.use(express.json());
-
-app.get("/", (req, res) => {
-  res.send("Hello World!");
-});
-
 app.get('/search', async (req, res, next) => {
   try {
     const searchQuery = req.query.search_query
@@ -62,9 +61,8 @@ app.get('/search', async (req, res, next) => {
   }
 })
 
-
 // GET endpoint to list all songs in a YouTube playlist
-app.get('/api/playlist/:playlistId', async (req, res) => {
+app.get('/api/youtube/playlist/:playlistId', async (req, res) => {
   try {
     const playlistId = req.params.playlistId;
     // const playlistTitle = getPlaylistTitle(playlistId, apiKey);
@@ -154,6 +152,19 @@ app.get('/callback', (req, res) => {
     });
 }); 
 
+// GET endpoint to list all songs in a Spotify playlist
+app.get('/api/spotify/playlist/:playlistId', async (req, res) => {
+  try {
+    const playlistId = req.params.playlistId;
+    // const playlistTitle = getPlaylistTitle(playlistId, apiKey);
+    const songs = await getSpotifyPlaylistData(spotifyApi, playlistId)
+    // console.log(songs.length)
+    res.json(songs);
+  } catch (error) {
+    console.error('Error fetching playlist:', error);
+    res.status(500).json({ error: 'Failed to fetch playlist' });
+  }
+});
 // Route to handle creating a new playlist on Spotify
 app.post('/api/create-playlist/:ytPlaylistId', async (req, res) => {
   try {
@@ -171,7 +182,6 @@ app.post('/api/create-playlist/:ytPlaylistId', async (req, res) => {
         console.log('Error searching song:', error);
       }
     }
-    getSpotifyPlaylistData(spotifyApi, playlistId)
     addTracksToPlaylist(spotifyApi, playlistId, searchArray)
     // console.log('Playlist ID:', playlistId);
     res.send("Success")
@@ -182,27 +192,7 @@ app.post('/api/create-playlist/:ytPlaylistId', async (req, res) => {
   }
 });
 
-// // Get a user's playlists
-// spotifyApi.getUserPlaylists('thelinmichael')
-//   .then(function(data) {
-//     console.log('Retrieved playlists', data.body);
-//   },function(err) {
-//     console.log('Something went wrong!', err);
-//   });
-// // Add tracks to a playlist
-// spotifyApi.addTracksToPlaylist('5ieJqeLJjjI8iJWaxeBLuK', ["spotify:track:4iV5W9uYEdYUVa79Axb7Rh", "spotify:track:1301WleyT98MSxVHPZCA6M"])
-//   .then(function(data) {
-//     console.log('Added tracks to playlist!');
-//   }, function(err) {
-//     console.log('Something went wrong!', err);
-//   });
-//   // Upload a custom playlist cover image
-// spotifyApi.uploadCustomPlaylistCoverImage('5ieJqeLJjjI8iJWaxeBLuK','longbase64uri')
-// .then(function(data) {
-//    console.log('Playlsit cover image uploaded!');
-// }, function(err) {
-//   console.log('Something went wrong!', err);
-// });
+//  ================== END Spotify APIs ======================
 
 app.listen(PORT, (error) =>{
   if(!error)
