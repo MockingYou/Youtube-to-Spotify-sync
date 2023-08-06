@@ -16,6 +16,7 @@ const getPlaylistTitle = async (playlistId, apiKey) => {
       return null; // Playlist not found or private
     }
   } catch (error) {
+    console.log(error)
     throw new Error('Failed to fetch playlist information');
   }
 }
@@ -42,6 +43,7 @@ const getTotalSongs = async (playlistId, apiKey, nextPageToken = null, totalSong
       return songs;
     }
   } catch (error) {
+    console.log(error)
     throw new Error('Failed to fetch playlist data');
   }
 }
@@ -59,10 +61,9 @@ const extractSongsFromYouTube = async (item) => {
       let filter = checkFullName(details)
       let track = normalizeString(filter.track)
       let artist = normalizeString(filter.artist)
-
       info.push({ track, artist });
     } catch (error) {
-      throw new Error('Failed to fetch song data');
+      console.log(error)
      }
   }
   return info;

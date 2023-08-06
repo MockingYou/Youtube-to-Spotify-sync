@@ -7,10 +7,7 @@ const createPlaylistOnSpotify = async (playlistTitle, spotifyApi) => {
     const spotifyPlaylistId = playlistData.body.id;
     console.log('Created playlist with ID:', spotifyPlaylistId);
     // Save the playlist ID to the global variable
-
-    // Now you can use the spotifyPlaylistId for other operations
-    // For example, you can make another API call using this playlist ID:
-    const userPlaylists = await spotifyApi.getPlaylist(spotifyPlaylistId);
+    // const userPlaylists = await spotifyApi.getPlaylist(spotifyPlaylistId);
     // console.log('Retrieved playlists', userPlaylists.body);
   
     return spotifyPlaylistId; // Return the playlist ID if needed
@@ -24,7 +21,7 @@ const createPlaylistOnSpotify = async (playlistTitle, spotifyApi) => {
 const searchSongs = async (spotifyApi, track, artist) => {
   try {
     const song = await spotifyApi.searchTracks(`${track} ${artist}`)
-    console.log(`Search tracks by "${track}" in the track name and "${artist}" in the artist name`);
+    // console.log(`Search tracks by "${track}" in the track name and "${artist}" in the artist name`);
     let trackId = `spotify:track:${song.body.tracks.items[0].id}`
     return trackId;
   } catch (error) {
@@ -39,7 +36,27 @@ const addTracksToPlaylist = async (spotifyApi, playlistId, tracks) => {
     console.log('Added tracks to playlist!');
   } catch (error) {
     console.log('Something went wrong!', error);
+    throw error;
   }
 }
 
-module.exports = { createPlaylistOnSpotify, searchSongs, addTracksToPlaylist };
+const getSpotifyPlaylistData = async (spotifyApi, playlistId) => {
+  const info = []
+  const playlistTracks = await spotifyApi.getPlaylistTracks(playlistId, {
+    offset: 0,
+    limit: 5,
+    fields: 'items'
+  })
+  let playlistItems = playlistTracks.body.items
+  let track = ''
+  let artist = ''
+  playlistItems.forEach(item => {
+    track = item.track.name
+    artist = item.track.artists[0].name
+    info.push({ track, artist });
+  });
+  console.log(info)
+
+  return info
+}
+module.exports = { createPlaylistOnSpotify, searchSongs, addTracksToPlaylist, getSpotifyPlaylistData };
