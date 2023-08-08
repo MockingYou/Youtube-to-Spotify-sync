@@ -2,36 +2,79 @@ const express = require('express');
 const cors = require('cors'); // Import the cors package
 const axios = require('axios');
 const app = express();
+const session = require('express-session');
 const PORT = 5050;
 let SpotifyWebApi = require('spotify-web-api-node');
+const { google } = require('googleapis');
 
 const config = require('./config.js')
-const { getTotalSongs, getPlaylistTitle } = require('./get-youtube-data');
+const { getTotalSongs, getPlaylistTitle, createPlaylist } = require('./get-youtube-data');
 const { createPlaylistOnSpotify, searchSongs, addTracksToPlaylist, getSpotifyPlaylistData } = require('./get-spotify-data');
 
-const apiKey = config.youtube_api_key;
+// Spotify data
 const client_id_spotify = config.client_id_spotify;    
 const client_secret_spotify = config.client_secret_spotify;
-const baseApiUrl = "https://www.googleapis.com/youtube/v3"; 
 let spotify_token = ""
+
+//Youtube data
+const apiKey = config.youtube_api_key;
+const client_id_youtube = config.client_id_youtube;    
+const client_secret_youtube = config.client_secret_youtube;
+const baseApiUrl = "https://www.googleapis.com/youtube/v3"; 
+const redirectUriYoutube = 'http://localhost:5050/youtube/callback'
+const oauth2Client = new google.auth.OAuth2(
+  client_id_youtube,
+  client_secret_youtube,
+  redirectUriYoutube
+);
+let youtube_token = ""
+const SCOPES = ['https://www.googleapis.com/auth/youtube.readonly'];
 // https://www.googleapis.com/youtube/v3/search?key=apiKey&type=video&part=snippet&q=foo   ---> change type for playlist
 
 // Enable CORS for all routes
 app.use(cors());
 app.use(express.json());
+app.use(session({ secret: 'your-secret-key', resave: false, saveUninitialized: true }));
+
+
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
 });
 
-// -------- Google APIS ----------
+//  ================== Google APIs ======================
 
-const { google } = require('googleapis');
 
 const youtube = google.youtube({
   version: 'v3',
   auth: apiKey
 })
+app.get('/youtube/login', (req, res) => {
+  if (!req.session.tokens) {
+    // Redirect to Google's authorization URL
+    const authUrl = oauth2Client.generateAuthUrl({ access_type: 'offline', scope: SCOPES });
+    return res.redirect(authUrl);
+  } else {
+    // Tokens are already stored in the session
+    res.send('Logged in!');
+  }
+});
+
+app.get('/youtube/callback', async (req, res) => {
+  const code = req.query.code;
+
+  try {
+    // Exchange the authorization code for tokens
+    const { tokens } = await oauth2Client.getToken(code);
+    req.session.tokens = tokens;
+    youtube_token = tokens.access_token
+    console.log(tokens)
+    res.redirect('/');
+  } catch (error) {
+    console.error('Error getting tokens:', error);
+    res.status(500).send('Error getting tokens');
+  }
+});
 
 app.get('/search-with-googleapis', async (req, res, next) => {
   try {
@@ -47,6 +90,8 @@ app.get('/search-with-googleapis', async (req, res, next) => {
     next(error)
   }
 })
+
+
 // -------- END Google APIS ----------
 
 app.get('/search', async (req, res, next) => {
@@ -73,6 +118,18 @@ app.get('/api/youtube/playlist/:playlistId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch playlist' });
   }
 });
+
+app.post('/api/youtube/create-playlist/:playlistId', async (req, res) => {
+  try {
+    const playlistId = req.params.playlistId;
+    let songs = await getSpotifyPlaylistData(spotifyApi, playlistId)
+    await createPlaylist(songs, playlistId, apiKey, youtube_token)
+  } catch (error) {
+    console.error('Error fetching playlist:', error);
+  }
+})
+//  ================== END Google APIs ======================
+
 
 //  ================== Spotify APIs ======================
 const scopes = [
@@ -104,7 +161,7 @@ var spotifyApi = new SpotifyWebApi({
   redirectUri: 'http://localhost:5050/callback'
 });
 
-app.get('/login', (req, res) => {
+app.get('/spotify/login', (req, res) => {
   res.redirect(spotifyApi.createAuthorizeURL(scopes));
 });
 
@@ -123,15 +180,11 @@ app.get('/callback', (req, res) => {
     .authorizationCodeGrant(code)
     .then(data => {
       spotify_token = data.body['access_token'];
-      // console.log(spotify_token)
       const refresh_token = data.body['refresh_token'];
       const expires_in = data.body['expires_in'];
 
       spotifyApi.setAccessToken(spotify_token);
       spotifyApi.setRefreshToken(refresh_token);
-
-      // console.log('access_token:', spotify_token);
-      // console.log('refresh_token:', refresh_token);
 
       console.log(
         `Sucessfully retreived access token. Expires in ${expires_in} s.`
@@ -165,7 +218,7 @@ app.get('/api/spotify/playlist/:playlistId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch playlist' });
   }
 });
-// Route to handle creating a new playlist on Spotify
+// Route to handle creating a new playlist on Spotify using the youtube playlist id
 app.post('/api/create-playlist/:ytPlaylistId', async (req, res) => {
   try {
     const ytPlaylistId = req.params.ytPlaylistId;

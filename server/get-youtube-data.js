@@ -4,6 +4,32 @@ const ytdl = require('ytdl-core');
 
 const { checkFullName, normalizeString } = require('./utils/filter-songs')
 
+const redirectUri = 'http://localhost:5050/youtube/callback'
+
+const getToken = async (clientId, clientSecret) => {
+  try {
+    const response = await axios.post('https://oauth2.googleapis.com/token', null, {
+      params: {
+        code: authorizationCode,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      },
+    });
+
+    const accessToken = response.data.access_token;
+    console.log('Access Token:', accessToken);
+    return accessToken;
+  } catch (error) {
+    console.error('Error getting access token:', error.message);
+    throw error;
+  }
+};
+
+
+// ======================== Get youtube data from playlist =============================
+
 // Function to get the playlist name
 const getPlaylistTitle = async (playlistId, apiKey) => {
   try {
@@ -51,7 +77,7 @@ const getTotalSongs = async (playlistId, apiKey, nextPageToken = null, totalSong
 // Function to extract song names and artists from YouTube API response
 const extractSongsFromYouTube = async (item) => {
   const url = "https://www.youtube.com/watch?v=";
-  const info = [];
+  const songs = [];
 
   for (let i = 0; i < item.length; i++) {
     const videoId = item[i].snippet.resourceId.videoId;
@@ -61,12 +87,131 @@ const extractSongsFromYouTube = async (item) => {
       let filter = checkFullName(details)
       let track = normalizeString(filter.track)
       let artist = normalizeString(filter.artist)
-      info.push({ track, artist });
+      songs.push({ track, artist });
     } catch (error) {
       console.log(error)
      }
   }
-  return info;
+  return songs;
 }
 
-module.exports =  { getTotalSongs, getPlaylistTitle } 
+
+// ======================== END Get youtube data from playlist =============================
+
+
+// ======================== Create youtube playlist using spotify data =====================
+
+const searchSongs = async (songsArray, apiKey) => {
+  try {
+    console.log(songsArray)
+    const playlistItems = [];
+    for (const song of songsArray) {
+      const query = `${song.artist} ${song.track}`;
+      console.log(query)
+      const searchResponse = await axios.get(`${baseApiUrl}/search`, {
+        params: {
+          key: apiKey,
+          q: query,
+          part: 'id',
+          type: 'video',
+          maxResults: 1,
+        },
+      });
+      console.log(searchResponse)
+      if (searchResponse.data.items.length > 0) {
+        const videoId = searchResponse.data.items[0].id.videoId;
+        playlistItems.push(videoId);
+      }
+    }
+    if (playlistItems.length === 0) {
+      console.log('No videos found for the provided artist-song pairs.');
+      return;
+    }
+    return playlistItems
+  } catch (error) {
+    console.log("Search Error: " + error.message)
+  }
+}
+
+const createPlaylist = async (songsArray, playlistTitle, apiKey, oauthToken) => {
+  try {
+    let playlistItems = await searchSongs(songsArray, apiKey);
+
+    const createPlaylistResponse = await axios.post(
+      `${baseApiUrl}/playlists`,
+      {
+        snippet: {
+          title: playlistTitle,
+          description: 'My playlist created using the YouTube Data API',
+        },
+        status: {
+          privacyStatus: 'private', // Change privacy status as needed
+        },
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${oauthToken}`,
+        },
+        params: {
+          part: 'snippet,status',
+        },
+      }
+    );
+    const playlistId = createPlaylistResponse.data.id;
+    for (const videoId of playlistItems) {
+      await axios.post(
+        'https://www.googleapis.com/youtube/v3/playlistItems',
+        {
+          snippet: {
+            playlistId: playlistId,
+            resourceId: {
+              kind: 'youtube#video',
+              videoId: videoId,
+            },
+          },
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${oauthToken}`,
+          },
+          params: {
+            part: 'snippet',
+          },
+        }
+      );
+    }
+
+    console.log('Playlist created and videos added successfully.');
+  } catch (error) {
+    console.log("Create Error: " + error.message);
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ======================== END Create youtube playlist using spotify data =====================
+
+
+
+module.exports =  { getTotalSongs, getPlaylistTitle, createPlaylist } 
