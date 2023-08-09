@@ -48,6 +48,27 @@ const getPlaylistTitle = async (playlistId, apiKey) => {
 }
 
 // Function to get the artist and song name 
+// Function to extract song names and artists from YouTube API response
+const extractSongsFromYouTube = async (item) => {
+  const url = "https://www.youtube.com/watch?v=";
+  const songs = [];
+
+  for (let i = 0; i < item.length; i++) {
+    const videoId = item[i].snippet.resourceId.videoId;
+    const video_url = url + videoId;
+    try {
+      const details = await ytdl.getBasicInfo(video_url);
+      let filter = checkFullName(details)
+      let track = normalizeString(filter.track)
+      let artist = normalizeString(filter.artist)
+      songs.push({ track, artist });
+    } catch (error) {
+      console.log(error)
+     }
+  }
+  return songs;
+}
+
 const getTotalSongs = async (playlistId, apiKey, nextPageToken = null, totalSongs = 0, songs = []) => {
   try {
     const maxResults = 50; // Maximum results per page (50 is the maximum allowed by the YouTube Data API).
@@ -74,36 +95,13 @@ const getTotalSongs = async (playlistId, apiKey, nextPageToken = null, totalSong
   }
 }
 
-// Function to extract song names and artists from YouTube API response
-const extractSongsFromYouTube = async (item) => {
-  const url = "https://www.youtube.com/watch?v=";
-  const songs = [];
-
-  for (let i = 0; i < item.length; i++) {
-    const videoId = item[i].snippet.resourceId.videoId;
-    const video_url = url + videoId;
-    try {
-      const details = await ytdl.getBasicInfo(video_url);
-      let filter = checkFullName(details)
-      let track = normalizeString(filter.track)
-      let artist = normalizeString(filter.artist)
-      songs.push({ track, artist });
-    } catch (error) {
-      console.log(error)
-     }
-  }
-  return songs;
-}
-
-
 // ======================== END Get youtube data from playlist =============================
 
 
 // ======================== Create youtube playlist using spotify data =====================
 
-const searchSongs = async (songsArray, apiKey) => {
+const searchSongsYoutube = async (songsArray, apiKey) => {
   try {
-    console.log(songsArray)
     const playlistItems = [];
     for (const song of songsArray) {
       const query = `${song.artist} ${song.track}`;
@@ -117,7 +115,6 @@ const searchSongs = async (songsArray, apiKey) => {
           maxResults: 1,
         },
       });
-      console.log(searchResponse)
       if (searchResponse.data.items.length > 0) {
         const videoId = searchResponse.data.items[0].id.videoId;
         playlistItems.push(videoId);
@@ -127,17 +124,18 @@ const searchSongs = async (songsArray, apiKey) => {
       console.log('No videos found for the provided artist-song pairs.');
       return;
     }
+    console.log(playlistItems)
     return playlistItems
   } catch (error) {
     console.log("Search Error: " + error.message)
   }
 }
 
-const createPlaylist = async (songsArray, playlistTitle, apiKey, oauthToken) => {
-  try {
-    let playlistItems = await searchSongs(songsArray, apiKey);
 
-    const createPlaylistResponse = await axios.post(
+const createPlaylistOnYoutube = async (playlistTitle, oauthToken) => {
+  try {
+    console.log(oauthToken)
+    await axios.post(
       `${baseApiUrl}/playlists`,
       {
         snippet: {
@@ -157,6 +155,15 @@ const createPlaylist = async (songsArray, playlistTitle, apiKey, oauthToken) => 
         },
       }
     );
+  } catch (error) {
+    console.log("Create Error: " + error.message);
+  }
+};
+
+const addSongsToPlaylist = async (oauthToken, apiKey) => {
+  try {
+    let playlistItems = await searchSongsYoutube(songsArray, apiKey);
+
     const playlistId = createPlaylistResponse.data.id;
     for (const videoId of playlistItems) {
       await axios.post(
@@ -180,7 +187,6 @@ const createPlaylist = async (songsArray, playlistTitle, apiKey, oauthToken) => 
         }
       );
     }
-
     console.log('Playlist created and videos added successfully.');
   } catch (error) {
     console.log("Create Error: " + error.message);
@@ -214,4 +220,4 @@ const createPlaylist = async (songsArray, playlistTitle, apiKey, oauthToken) => 
 
 
 
-module.exports =  { getTotalSongs, getPlaylistTitle, createPlaylist } 
+module.exports =  { searchSongsYoutube, getTotalSongs, getPlaylistTitle, createPlaylistOnYoutube } 
