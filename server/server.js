@@ -8,7 +8,7 @@ let SpotifyWebApi = require('spotify-web-api-node');
 const { google } = require('googleapis');
 
 const config = require('./config.js')
-const { searchSongsYoutube, getTotalSongs, getPlaylistTitle, createPlaylistOnYoutube } = require('./get-youtube-data');
+const { searchSongsYoutube, getTotalSongs, getPlaylistTitle, createPlaylistOnYoutube, addSongsToPlaylist } = require('./get-youtube-data');
 const { createPlaylistOnSpotify, searchSongs, addTracksToPlaylist, getSpotifyPlaylistData } = require('./get-spotify-data');
 
 // Spotify data
@@ -28,8 +28,13 @@ const oauth2Client = new google.auth.OAuth2(
   redirectUriYoutube
 );
 let youtube_token = ""
-const yt_scopes = ["https://www.googleapis.com/auth/youtube", "https://www.googleapis.com/auth/youtube.force-ssl", 
-"https://www.googleapis.com/auth/youtubepartner"]
+const yt_scopes = [
+  "https://www.googleapis.com/auth/youtube",
+  "https://www.googleapis.com/auth/youtube.force-ssl",
+  "https://www.googleapis.com/auth/youtubepartner",
+  "https://www.googleapis.com/auth/youtube.upload", // Add this scope for playlist management
+  "https://www.googleapis.com/auth/youtube.readonly", // Add this scope for reading playlist information
+];
 // https://www.googleapis.com/youtube/v3/search?key=apiKey&type=video&part=snippet&q=foo   ---> change type for playlist
 
 // Enable CORS for all routes
@@ -63,7 +68,6 @@ app.get('/youtube/login', (req, res) => {
 
 app.get('/youtube/callback', async (req, res) => {
   const code = req.query.code;
-
   try {
     // Exchange the authorization code for tokens
     const { tokens } = await oauth2Client.getToken(code);
@@ -129,7 +133,7 @@ app.post('/playlist', async (req, res) => {
   }
 })
 
-app.put('/playlist/:playlistId', async (req, res) => {
+app.get('/playlist/:playlistId', async (req, res) => {
   try {
     const playlistId = req.params.playlistId;
     let spotifyData = await getSpotifyPlaylistData(spotifyApi, playlistId)
@@ -145,8 +149,9 @@ app.put('/playlist/:playlistId', async (req, res) => {
 app.post('/api/youtube/create-playlist/:playlistId', async (req, res) => {
   try {
     const playlistId = req.params.playlistId;
-    let songs = await getSpotifyPlaylistData(spotifyApi, playlistId)
-    await createPlaylistOnYoutube(songs, playlistId, apiKey, youtube_token)
+    let spotifyData = await getSpotifyPlaylistData(spotifyApi, playlistId)
+    let songs = await addSongsToPlaylist(spotifyData, "Test", youtube_token, apiKey)
+    res.send(songs)
   } catch (error) {
     console.error('Error fetching playlist:', error);
   }

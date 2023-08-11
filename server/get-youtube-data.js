@@ -105,7 +105,7 @@ const searchSongsYoutube = async (songsArray, apiKey) => {
     const playlistItems = [];
     for (const song of songsArray) {
       const query = `${song.artist} ${song.track}`;
-      console.log(query)
+      // console.log(query)
       const searchResponse = await axios.get(`${baseApiUrl}/search`, {
         params: {
           key: apiKey,
@@ -124,7 +124,7 @@ const searchSongsYoutube = async (songsArray, apiKey) => {
       console.log('No videos found for the provided artist-song pairs.');
       return;
     }
-    console.log(playlistItems)
+    // console.log(playlistItems)
     return playlistItems
   } catch (error) {
     console.log("Search Error: " + error.message)
@@ -134,8 +134,7 @@ const searchSongsYoutube = async (songsArray, apiKey) => {
 
 const createPlaylistOnYoutube = async (playlistTitle, oauthToken) => {
   try {
-    console.log(oauthToken)
-    await axios.post(
+    const response = await axios.post(
       `${baseApiUrl}/playlists`,
       {
         snippet: {
@@ -155,19 +154,24 @@ const createPlaylistOnYoutube = async (playlistTitle, oauthToken) => {
         },
       }
     );
+    console.log("Playlist created succesfully (Empty).  " + response.data.id)
+    return response.data.id; // Return the created playlist's ID
   } catch (error) {
-    console.log("Create Error: " + error.message);
+    console.log("Create Playlist Error: " + error.message);
+    throw error;
   }
 };
 
-const addSongsToPlaylist = async (oauthToken, apiKey) => {
+const addSongsToPlaylist = async (songsArray, playlistTitle, oauthToken, apiKey) => {
+  console.log(songsArray)
+  console.log(playlistTitle)
   try {
     let playlistItems = await searchSongsYoutube(songsArray, apiKey);
-
-    const playlistId = createPlaylistResponse.data.id;
+    let playlistId = await createPlaylistOnYoutube(playlistTitle, oauthToken);
     for (const videoId of playlistItems) {
+      console.log(videoId)
       await axios.post(
-        'https://www.googleapis.com/youtube/v3/playlistItems',
+        `${baseApiUrl}/playlistItems`,
         {
           snippet: {
             playlistId: playlistId,
@@ -189,7 +193,7 @@ const addSongsToPlaylist = async (oauthToken, apiKey) => {
     }
     console.log('Playlist created and videos added successfully.');
   } catch (error) {
-    console.log("Create Error: " + error.message);
+    console.log("Add Playlist Error: " + error.message);
   }
 };
 
@@ -220,4 +224,4 @@ const addSongsToPlaylist = async (oauthToken, apiKey) => {
 
 
 
-module.exports =  { searchSongsYoutube, getTotalSongs, getPlaylistTitle, createPlaylistOnYoutube } 
+module.exports =  { searchSongsYoutube, getTotalSongs, getPlaylistTitle, createPlaylistOnYoutube, addSongsToPlaylist } 

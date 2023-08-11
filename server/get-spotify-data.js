@@ -75,6 +75,7 @@ const getSpotifyPlaylistData = async (spotifyApi, playlistId) => {
         offset += maxResults;
       }
     } while (hasSongs)
+    // console.log(allSongs)
     return allSongs
   } catch (error) {
     console.log(error.message)
