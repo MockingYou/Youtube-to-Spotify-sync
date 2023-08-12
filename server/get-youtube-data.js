@@ -31,7 +31,7 @@ const getToken = async (clientId, clientSecret) => {
 // ======================== Get youtube data from playlist =============================
 
 // Function to get the playlist name
-const getPlaylistTitle = async (playlistId, apiKey) => {
+const getYoutubePlaylistTitle = async (playlistId, apiKey) => {
   try {
     const url = `${baseApiUrl}/playlists?part=snippet&id=${playlistId}&key=${apiKey}`;
     const response = await axios.get(url);
@@ -224,4 +224,4 @@ const addSongsToPlaylist = async (songsArray, playlistTitle, oauthToken, apiKey)
 
 
 
-module.exports =  { searchSongsYoutube, getTotalSongs, getPlaylistTitle, createPlaylistOnYoutube, addSongsToPlaylist } 
+module.exports =  { searchSongsYoutube, getTotalSongs, getYoutubePlaylistTitle, createPlaylistOnYoutube, addSongsToPlaylist } 

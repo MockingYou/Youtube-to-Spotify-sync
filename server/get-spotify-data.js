@@ -1,5 +1,16 @@
 const axios = require('axios');
 
+// Get Spotify Playlist title
+const getSpotifyPlaylistTitle = async (playlistId, spotifyApi) => {
+  try {
+    const playlist = await spotifyApi.getPlaylist(playlistId);
+    const playlistTitle = playlist.body.name;
+    return playlistTitle;
+  } catch (error) {
+    console.error('Error fetching playlist title:', error.message);
+  }
+};
+
 // Create spotify playlist
 const createPlaylistOnSpotify = async (playlistTitle, spotifyApi) => {
   try {
@@ -109,4 +120,4 @@ const getSpotifyPlaylistData = async (spotifyApi, playlistId) => {
 
 
 
-module.exports = { createPlaylistOnSpotify, searchSongs, addTracksToPlaylist, getSpotifyPlaylistData };
+module.exports = { createPlaylistOnSpotify, searchSongs, addTracksToPlaylist, getSpotifyPlaylistData, getSpotifyPlaylistTitle };

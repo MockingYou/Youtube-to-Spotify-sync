@@ -8,8 +8,8 @@ let SpotifyWebApi = require('spotify-web-api-node');
 const { google } = require('googleapis');
 
 const config = require('./config.js')
-const { searchSongsYoutube, getTotalSongs, getPlaylistTitle, createPlaylistOnYoutube, addSongsToPlaylist } = require('./get-youtube-data');
-const { createPlaylistOnSpotify, searchSongs, addTracksToPlaylist, getSpotifyPlaylistData } = require('./get-spotify-data');
+const { searchSongsYoutube, getTotalSongs, getYoutubePlaylistTitle, createPlaylistOnYoutube, addSongsToPlaylist } = require('./get-youtube-data');
+const { createPlaylistOnSpotify, searchSongs, addTracksToPlaylist, getSpotifyPlaylistData, getSpotifyPlaylistTitle } = require('./get-spotify-data');
 
 // Spotify data
 const client_id_spotify = config.client_id_spotify;    
@@ -145,12 +145,12 @@ app.get('/playlist/:playlistId', async (req, res) => {
     console.error('Error fetching playlist:', error);
   }
 })
-
 app.post('/api/youtube/create-playlist/:playlistId', async (req, res) => {
   try {
     const playlistId = req.params.playlistId;
+    const playlistTitle = await getSpotifyPlaylistTitle(playlistId, spotifyApi)
     let spotifyData = await getSpotifyPlaylistData(spotifyApi, playlistId)
-    let songs = await addSongsToPlaylist(spotifyData, "Test", youtube_token, apiKey)
+    let songs = await addSongsToPlaylist(spotifyData, playlistTitle, youtube_token, apiKey)
     res.send(songs)
   } catch (error) {
     console.error('Error fetching playlist:', error);
@@ -251,7 +251,7 @@ app.get('/api/spotify/playlist/:playlistId', async (req, res) => {
 app.post('/api/create-playlist/:ytPlaylistId', async (req, res) => {
   try {
     const ytPlaylistId = req.params.ytPlaylistId;
-    const playlistTitle = await getPlaylistTitle(ytPlaylistId, apiKey);
+    const playlistTitle = await getYoutubePlaylistTitle(ytPlaylistId, apiKey);
     let playlistId = await createPlaylistOnSpotify(playlistTitle, spotifyApi)
   
     const songs = await getTotalSongs(ytPlaylistId, apiKey)
