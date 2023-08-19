@@ -1,3 +1,5 @@
+const axios = require('axios');
+
 // Get Spotify Playlist title
 const getSpotifyPlaylistTitle = async (playlistId, spotifyApi) => {
   try {
@@ -15,7 +17,10 @@ const createPlaylistOnSpotify = async (playlistTitle, spotifyApi) => {
     const playlistData = await spotifyApi.createPlaylist(playlistTitle, { 'description': 'Youtube Playlist', 'public': true });
     const spotifyPlaylistId = playlistData.body.id;
     console.log('Created playlist with ID:', spotifyPlaylistId);
-
+    // Save the playlist ID to the global variable
+    // const userPlaylists = await spotifyApi.getPlaylist(spotifyPlaylistId);
+    // console.log('Retrieved playlists', userPlaylists.body);
+  
     return spotifyPlaylistId; // Return the playlist ID if needed
   } catch (error) {
     console.log('Failed to create or retrieve playlist', error);
@@ -27,6 +32,7 @@ const createPlaylistOnSpotify = async (playlistTitle, spotifyApi) => {
 const searchSongs = async (spotifyApi, track, artist) => {
   try {
     const song = await spotifyApi.searchTracks(`${track} ${artist}`)
+    // console.log(`Search tracks by "${track}" in the track name and "${artist}" in the artist name`);
     let trackId = `spotify:track:${song.body.tracks.items[0].id}`
     return trackId;
   } catch (error) {
@@ -80,6 +86,7 @@ const getSpotifyPlaylistData = async (spotifyApi, playlistId) => {
         offset += maxResults;
       }
     } while (hasSongs)
+    // console.log(allSongs)
     return allSongs
   } catch (error) {
     console.log(error.message)

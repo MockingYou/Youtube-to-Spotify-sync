@@ -1,10 +1,17 @@
 const express = require('express');
 const cors = require('cors'); // Import the cors package
 const app = express();
-const session = require('express-session');
+const { google } = require('googleapis');
+const fs = require('fs');
+const bodyParser = require('body-parser');
+
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+
+const credentials = JSON.parse(fs.readFileSync('./credentials/credentials.json'));
+
 const PORT = 5050;
 let SpotifyWebApi = require('spotify-web-api-node');
-const { google } = require('googleapis');
 
 const config = require('./config.js')
 const { getTotalSongs, getYoutubePlaylistTitle, createPlaylistOnYoutube, addSongsToPlaylist } = require('./get-youtube-data');
@@ -13,6 +20,11 @@ const { createPlaylistOnSpotify, searchSongs, addTracksToPlaylist, getSpotifyPla
 // Spotify data
 const client_id_spotify = config.client_id_spotify;    
 const client_secret_spotify = config.client_secret_spotify;
+let spotifyApi = new SpotifyWebApi({
+  clientId: client_id_spotify,
+  clientSecret: client_secret_spotify,
+  redirectUri: 'http://localhost:5050/spotify/callback'
+});
 let spotify_token = ""
 const spotify_scopes = [
   'ugc-image-upload',
@@ -35,91 +47,125 @@ const spotify_scopes = [
   'user-follow-read',
   'user-follow-modify'
 ];
-var spotifyApi = new SpotifyWebApi({
-  clientId: client_id_spotify,
-  clientSecret: client_secret_spotify,
-  redirectUri: 'http://localhost:5050/spotify/callback'
-});
 
 //Youtube data
-const apiKey = config.youtube_api_key;
+const apiKey = credentials.web.api_key;
 const client_id_youtube = config.client_id_youtube;    
 const client_secret_youtube = config.client_secret_youtube;
 const redirectUriYoutube = 'http://localhost:5050/youtube/callback'
-const oauth2Client = new google.auth.OAuth2(
-  client_id_youtube,
-  client_secret_youtube,
-  redirectUriYoutube
-);
-let youtube_token = ""
+const oauthClient = new google.auth.OAuth2(    
+  credentials.web.client_id,
+  credentials.web.client_secret,
+  credentials.web.redirect_uris[0]);
+
 const yt_scopes = [
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
   "https://www.googleapis.com/auth/youtube",
   "https://www.googleapis.com/auth/youtube.force-ssl",
   "https://www.googleapis.com/auth/youtubepartner",
   "https://www.googleapis.com/auth/youtube.upload", // Add this scope for playlist management
   "https://www.googleapis.com/auth/youtube.readonly", // Add this scope for reading playlist information
 ];
+let youtube_token = null;
 
 // Enable CORS for all routes
 app.use(cors());
 app.use(express.json());
-app.use(session({ secret: 'your-secret-key', resave: false, saveUninitialized: true }));
-
-app.get("/", (req, res) => {
-  res.send("Hello World!");
-});
 
 //  ================== Google APIs ======================
 
-app.get('/youtube/login', (req, res) => {
-  if (!req.session.tokens) {
-    // Redirect to Google's authorization URL
-    const authUrl = oauth2Client.generateAuthUrl({ access_type: 'offline', scope: yt_scopes, include_granted_scopes: true });
-    return res.redirect(authUrl);
-  } else {
-    // Tokens are already stored in the session
-    res.send('Logged in!');
-  }
+app.get("/auth", (req, res) => {
+  const authUrl = oauthClient.generateAuthUrl({
+      access_type: 'offline',
+      scope: yt_scopes,
+  });
+
+  res.redirect(authUrl);
 });
 
-app.get('/youtube/callback', async (req, res) => {
+app.get("/auth/callback", async (req, res) => {
   const code = req.query.code;
+
   try {
-    // Exchange the authorization code for tokens
-    const { tokens } = await oauth2Client.getToken(code);
-    req.session.tokens = tokens;
-    youtube_token = tokens.access_token
-    res.redirect('/');
-  } catch (error) {
-    console.error('Error getting tokens:', error);
-    res.status(500).send('Error getting tokens');
+      const tokenResponse = await oauthClient.getToken(code);
+      youtube_token = tokenResponse.tokens.access_token;
+      console.log("Your token: " + youtube_token)
+      res.redirect("/protected");
+  } catch (err) {
+      console.error("Error exchanging code for token:", err);
+      res.status(500).send("Error");
   }
 });
 
-app.post('/playlist', async (req, res) => {
+app.get("/protected", (req, res) => {
+  if (!youtube_token) {
+      res.redirect("/auth");
+  } else {
+      res.send("Welcome to the protected route!");
+  }
+});
+
+// -------- END Google APIS ----------
+
+// GET endpoint to list all songs in a YouTube playlist
+app.get('/api/youtube/playlist/:playlistId', async (req, res) => {
   try {
-    await createPlaylistOnYoutube("CACAT DE PLAYLIST", youtube_token, apiKey)
-    res.send("Success")
+    const playlistId = req.params.playlistId;
+    const songs = await getTotalSongs(playlistId, apiKey);
+    res.json(songs);
   } catch (error) {
     console.error('Error fetching playlist:', error);
+    res.status(500).json({ error: 'Failed to fetch playlist' });
   }
-})
+});
+
+app.post("/search-songs", async (req, res) => {
+  try {
+      const youtube = google.youtube({
+          version: 'v3',
+          auth: apiKey, // Use your API key here
+      });
+
+      const songTitles = req.body.songTitles; // Array of song titles
+
+      const videoIds = [];
+
+      for (const songTitle of songTitles) {
+          const response = await youtube.search.list({
+              part: 'id',
+              q: songTitle,
+              maxResults: 1,
+          });
+
+          if (response.data.items.length > 0) {
+              const videoId = response.data.items[0].id.videoId;
+              videoIds.push(videoId);
+          }
+      }
+
+      res.json({ videoIds: videoIds });
+  } catch (err) {
+      console.error("Error searching songs:", err);
+      res.status(500).json({ error: "Error searching songs" });
+  }
+});
 
 app.post('/api/youtube/create-playlist/:playlistId', async (req, res) => {
   try {
     const playlistId = req.params.playlistId;
-    console.log(playlistId)
-    const playlistTitle = await getSpotifyPlaylistTitle(playlistId, spotifyApi)
-    console.log(playlistTitle)  
+    
+    const playlistTitle = await getSpotifyPlaylistTitle(playlistId, spotifyApi);
     let spotifyData = await getSpotifyPlaylistData(spotifyApi, playlistId)
-    let songs = await addSongsToPlaylist(playlistTitle, spotifyData, youtube_token, apiKey)
-    res.send(songs)
+    await addSongsToPlaylist(oauthClient, spotifyData, playlistTitle, youtube_token, apiKey);
+    
+    res.send('Playlist created and videos added successfully.');
   } catch (error) {
-    console.error('Error fetching playlist:', error);
+    console.error('Error fetching or creating playlist:', error);
+    res.status(500).json({ error: 'Failed to fetch or create playlist' });
   }
-})
+});
 //  ================== END Google APIs ======================
-
 
 //  ================== Spotify APIs ======================
 
@@ -171,6 +217,7 @@ app.get('/spotify/callback', (req, res) => {
 app.get('/api/spotify/playlist/:playlistId', async (req, res) => {
   try {
     const playlistId = req.params.playlistId;
+    // const playlistTitle = getPlaylistTitle(playlistId, apiKey);
     const songs = await getSpotifyPlaylistData(spotifyApi, playlistId)
     // console.log(songs.length)
     res.json(songs);
@@ -216,3 +263,5 @@ app.listen(PORT, (error) =>{
       console.log("Error occurred, server can't start", error);
   }
 );
+
+module.exports = youtube_token

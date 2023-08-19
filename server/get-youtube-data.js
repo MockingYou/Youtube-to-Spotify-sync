@@ -1,6 +1,7 @@
 const baseApiUrl = "https://www.googleapis.com/youtube/v3";  
 const axios = require('axios');
 const ytdl = require('ytdl-core');
+const { google } = require('googleapis');
 
 const { checkFullName, normalizeString } = require('./utils/filter-songs')
 
@@ -76,78 +77,94 @@ const getTotalSongs = async (playlistId, apiKey, nextPageToken = null, totalSong
 
 // ======================== Create youtube playlist using spotify data =====================
 
-const searchSongsYoutube = async (songsArray, apiKey) => {
-  const playlistItems = [];
-  
-  for (const song of songsArray) {
-    const query = `${song.artist} ${song.track}`;
-    console.log(query);
-    try {
-      const searchResponse = await axios.get(`${baseApiUrl}/search?key=${apiKey}`, {
-        params: {
-          q: query,
-          part: 'id',
-          type: 'video',
-          maxResults: 1,
-        },
-      });
-      console.log(searchResponse); // Log the entire response for debugging
-      if (searchResponse.data.items.length > 0) {
-        const videoId = searchResponse.data.items[0].id.videoId;
-        playlistItems.push(videoId);
-      }
-    } catch (error) {
-      console.log("Search Error: " + error);
-    }
-  }
-  if (playlistItems.length === 0) {
-    console.log('No videos found for the provided artist-song pairs.');
-  }
-  console.log(playlistItems); // Log the collected playlist items
-  return playlistItems;
-}
-
-
-const createPlaylistOnYoutube = async (playlistTitle, oauthToken, apiKey) => {
+const createPlaylistOnYoutube = async (oauthClient, playlistTitle, oauthToken) => {
   try {
-    const response = await axios.post(
-      `${baseApiUrl}/playlists?key=${apiKey}`,
-      {
+    if (!oauthToken) {
+      console.log("Unauthorized");
+      return;
+    }
+    oauthClient.setCredentials({ access_token: oauthToken });
+
+    const youtube = google.youtube({
+      version: 'v3',
+      auth: oauthClient,
+    });
+    const playlistDescription = "This is a new playlist created via the API";
+
+    const response = await youtube.playlists.insert({
+      headers: {
+        'Authorization': `Bearer ${oauthToken}`,
+        'Content-Type': 'application/json',
+      },
+      part: 'snippet',
+      requestBody: {
         snippet: {
           title: playlistTitle,
-          description: 'My playlist created using the YouTube Data API',
-        },
-        status: {
-          privacyStatus: 'private', // Change privacy status as needed
+          description: playlistDescription,
         },
       },
-      {
-        headers: {
-          'Authorization': `Bearer ${oauthToken}`,
-          'Content-Type': 'application/json',
-        },
-        params: {
-          part: 'snippet,status',
-        },
-      }
-    );
-    console.log("Playlist created successfully. ID:", response.data.id); // Added log
-    return response.data.id; // Return the created playlist's ID
-  } catch (error) {
-    console.log("Create Error: " + error);
+    });
+    console.log("New playlist created:", response.data);
+    return response.data.id; // Save the playlist ID
+  } catch (err) {
+    console.error("Error creating playlist:", err);
+    throw err; // Rethrow the error to propagate it up
   }
 };
 
-const addSongsToPlaylist = async (playlistTitle, songsArray, oauthToken, apiKey) => {
+const searchSongsYoutube = async (songsArray, apiKey) => {
+  try {
+    const playlistItems = [];
+    const youtube = google.youtube({
+      version: 'v3',
+      auth: apiKey, // Use your API key here
+    });
+    for (const song of songsArray) {
+      const query = `${song.artist} ${song.track}`;
+      console.log('Search Query:', query);
+      try {
+        const searchResponse = await youtube.search.list({
+          part: 'id',
+          q: query,
+          maxResults: 1,
+          type: 'video',
+        });
+        if (searchResponse.data.items.length > 0) {
+          const videoId = searchResponse.data.items[0].id.videoId;
+          playlistItems.push(videoId);
+        }
+      } catch (error) {
+        console.log(`Error searching for song: ${query}`, error.message);
+        // You can handle the error here, e.g., skip the song or continue
+      }
+    }
+    if (playlistItems.length === 0) {
+      console.log('No videos found for the provided artist-song pairs.');
+    }
+    return playlistItems;
+  } catch (error) {
+    console.log("Search Error:", error.message);
+    throw error; // Rethrow the error to propagate it up
+  }
+};
+
+const addSongsToPlaylist = async (oauthClient, songsArray, playlistTitle, oauthToken, apiKey) => {
   try {
     let playlistItems = await searchSongsYoutube(songsArray, apiKey);
-    let playlistId = await createPlaylistOnYoutube(playlistTitle, oauthToken, apiKey);
-    
+    console.log('Playlist Items:', playlistItems);
+    let playlistId = await createPlaylistOnYoutube(oauthClient, playlistTitle, oauthToken); // Pass oauthClient here
+    console.log('Playlist ID:', playlistId);
+    oauthClient.setCredentials({ access_token: oauthToken });
+
+    const youtube = google.youtube({
+      version: 'v3',
+      auth: oauthClient,
+    });
     for (const videoId of playlistItems) {
       try {
-        await axios.post(
-          `${baseApiUrl}/playlistItems?key=${apiKey}`,
-          {
+        const response = await youtube.playlistItems.insert({
+          part: 'snippet',
+          requestBody: {
             snippet: {
               playlistId: playlistId,
               resourceId: {
@@ -156,27 +173,26 @@ const addSongsToPlaylist = async (playlistTitle, songsArray, oauthToken, apiKey)
               },
             },
           },
-          {
-            headers: {
-              'Authorization': `Bearer ${oauthToken}`,
-              'Content-Type': 'application/json',
-            },
-            params: {
-              part: 'snippet',
-            },
-          }
-        );
-        console.log(`Video ${videoId} added to the playlist.`);
+          headers: {
+            'Authorization': `Bearer ${oauthToken}`, // Use oauthToken here
+            'Content-Type': 'application/json',
+          },
+        });
+        console.log(`Song with video ID ${videoId} added to playlist`, response.data);
       } catch (error) {
-        console.log(`Error adding video ${videoId}: ${error.message}`);
+        console.log(`Error adding video ${videoId} to playlist`, error.message);
+        // You can handle the error here, e.g., skip the video or continue
       }
     }
     console.log('Playlist created and videos added successfully.');
   } catch (error) {
-    console.log("Add Playlist Error: " + error.message);
+    console.log("Add Playlist Error:", error.message);
   }
 };
 
+
 // ======================== END Create youtube playlist using spotify data =====================
+
+
 
 module.exports =  { searchSongsYoutube, getTotalSongs, getYoutubePlaylistTitle, createPlaylistOnYoutube, addSongsToPlaylist } 
